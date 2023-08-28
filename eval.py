@@ -1,20 +1,15 @@
 import torch
 import torch.nn as nn
-from torchinfo import summary
 import numpy as np
-from torchvision.models.vision_transformer import ViT_B_16_Weights
-from torchvision.models.vision_transformer import vit_b_16
 from torchvision.datasets import ImageFolder
-from pathlib import Path
-import torchvision.transforms
 from torch.utils.data import DataLoader
-from torch.utils.data import Dataset
 from itertools import islice
 from plotly.subplots import make_subplots
-import plotly.express as px
 import math
-import sys
 from tqdm.notebook import tqdm
+import torchmetrics
+from torchmetrics.classification import MulticlassAccuracy, MulticlassPrecision, MulticlassRecall
+import utils
 
 
 def accuracy(pred:torch.Tensor, target:torch.Tensor):
@@ -28,24 +23,21 @@ def errrate(pred:torch.Tensor, target:torch.Tensor):
 def mean(list):
     return sum(list)/len(list)
 
-def eval(m: nn.Module, dl: DataLoader, n_batches:int, lossf: nn.Module):
-    m.eval()
+def eval(m: nn.Module, dl: DataLoader, num_classes:int, device: torch.device):
+    average = "macro"
+    metricsf = torchmetrics.MetricCollection([
+        MulticlassAccuracy(num_classes),
+        MulticlassPrecision(num_classes,average= average),
+        MulticlassRecall(num_classes=num_classes,average=average),
+        utils.CrossEntropyLoss()])
     with torch.inference_mode():
-        pbar = tqdm(islice(dl, n_batches), leave=True)
-        losses = []
-        accs = []
-        errrs = []
-        for batch, ls in pbar:
-            logits = m(batch)
-            preds = torch.argmax(logits, dim=1)
-            loss = lossf(logits, ls).item()
-            losses.append(loss)
-            acc = accuracy(preds, ls)
-            accs.append(acc)
-            errr = errrate(preds, ls)
-            errrs.append(errr)
-            pbar.set_description(f"Loss:{loss:.3f}, acc:{acc*100:.1f}%, err rate:{errr:.3f}")
-    pbar.write(f"AVEREGE METRICS:\n\tLoss:{mean(losses):.3f}, acc:{mean(accs)*100:.1f}%, err rate:{mean(errrs):.3f}")
+        m.eval()
+        for batch, ls in dl:
+            logits = m(batch.to(device))
+            metricsf(logits.cpu(), ls)
+        metrics = metricsf.compute()
+        # print(f"\tTest: {utils.metrics_to_str(metrics)}\n")
+    return metrics
 
 
 
@@ -65,13 +57,9 @@ def eval_show(m: nn.Module, ds: ImageFolder, n:int=8, page:int=0):
     rows = math.ceil(n/cols)
     fig = make_subplots(rows=rows, cols=cols, subplot_titles=np.array(ds.classes)[preds])
 
-    std = np.array([0.229, 0.224, 0.225])
-    mean= np.array([0.485, 0.456, 0.406])
-
     for i, img in enumerate(imgs):
-        img_orig = torchvision.transforms.ToPILImage()((img * std.reshape(3,1,1))+mean.reshape(3,1,1))
         row = int(i / cols)
         col = i - row * cols
-        fig.add_image(z=img_orig, row = row+1, col = col+1 )
+        fig.add_image(z=utils.whitened_to_PIL(img), row = row+1, col = col+1 )
 
     return fig

@@ -1,5 +1,7 @@
 .vscode
+models
 data
 imagenette2
+cifar
 .DS_Store
 __pycache__
