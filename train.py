@@ -1,47 +1,55 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-import torchmetrics
-import utils
 import eval
 import math
+from tqdm.notebook import tqdm
 
-def train(m: nn.Module, epochs:int, train_dl: DataLoader, test_dl: DataLoader, device:torch.device, num_classes:int, opt:torch.optim.Optimizer, lossf:nn.Module):
-    eval_n_times = 5
-    eval_every_n_batches = math.ceil(len(train_dl)/eval_n_times)
+def train(m: nn.Module, epochs:int, train_dl: DataLoader, test_dl: DataLoader, device:torch.device, num_classes:int, opt:torch.optim.Optimizer, lossf:nn.Module, evals_per_epoch:int=5):
+    batches = len(train_dl)
+    # running window for the train metrics
+    metric_window = math.ceil(batches/evals_per_epoch)
     m = m.to(device)
-    args = ("multiclass", 0.5, num_classes)
-    train_metricsf = torchmetrics.MetricCollection(
-        torchmetrics.Accuracy(*args), 
-        torchmetrics.Precision(*args),
-        torchmetrics.Recall(*args),
-        utils.CrossEntropyLoss()).to(device)
-    train_metrics = []
-    test_metrics = []
-    for epoch in range(epochs):
-        m.train()
-        print(f"Epoch {epoch}:")
-        for i, (batch, ls) in enumerate(train_dl):
-            batch, ls = batch.to(device), ls.to(device)
-            print(f"\tBatch {i}")
-            logits = m(batch)
+    train_tracker = eval.get_metrics(num_classes)
+    test_tracker = eval.get_metrics(num_classes)
+    ebar = tqdm(range(epochs), desc="Epochs")
+    for epoch in ebar:
+        ebar.set_description(f"Epoch {epoch}")
+        ebar.write(f"Epoch {epoch}")
+        bbar = tqdm(enumerate(train_dl), total=batches, desc="Batches")
+        for i, (batch, ls) in bbar:
+            bbar.set_description(f"Batch {i}")
 
-            loss = lossf(logits, ls)
+            m.train()
+            batch_d, ls_d = batch.to(device), ls.to(device)
+            logits_d = m(batch_d)
+
+            loss_d = lossf(logits_d, ls_d)
             opt.zero_grad()
-            loss.backward()
+            loss_d.backward()
             opt.step()
 
             with torch.inference_mode():
-                train_metricsf(logits.cpu(), ls.cpu())
+                window_started = i % metric_window == 0
+                window_ended = (i+1) % metric_window == 0 or i == batches - 1
+                if(window_started):
+                    train_tracker.increment()
 
-                should_print = i % eval_every_n_batches == 0 or i == len(train_dl)-1
-                if should_print:
-                    train_m = train_metricsf.compute()
-                    print(f"\n\tTrain: {utils.metrics_to_str(train_m)}")
-                    train_metrics.append(train_m)
-                    train_metricsf.reset()
+                train_tracker(logits_d.cpu(), ls)
 
-                    test_m = eval.eval(m, test_dl, num_classes, device)
-                    print(f"\n\tTest: {utils.metrics_to_str(test_m)}")
-                    test_metrics.append(test_m)
-    return train_metrics, test_metrics
+                if window_ended:
+                    m.eval()
+                    bbar.write(f"Batch {i}:")
+                    bbar.write(f"Train: {eval.metrics_to_str(train_tracker.compute())}")
+
+                    bbar.write(f"Testing:")
+                    test_m = eval.eval(m, test_dl, num_classes, device, test_tracker)
+                    bbar.write(f"Test: {eval.metrics_to_str(test_m)}\n")
+
+            del batch_d
+            del ls_d
+            del loss_d
+            del logits_d
+        ebar.write("\n")
+
+    return train_tracker.compute_all(), test_tracker.compute_all()

@@ -1,29 +1,63 @@
 import numpy as np
 import torch
-import torchmetrics
 import torchvision
 import torch.nn as nn
+from torchvision.datasets import ImageFolder
+import torch.backends.mps
+import matplotlib.pyplot as plt
+from pathlib import Path
+from datetime import datetime
+from pathlib import Path 
+import os
+
 
 # ImageNet statistics used for whitening
-mean= np.array([0.485, 0.456, 0.406])
-std = np.array([0.229, 0.224, 0.225])
+MEAN= np.array([0.485, 0.456, 0.406])
+STD = np.array([0.229, 0.224, 0.225])
+
+MODELS_DIR = Path("models")
 
 def whitened_to_PIL(img):
-    return torchvision.transforms.ToPILImage()((img * std.reshape(3,1,1))+mean.reshape(3,1,1))
+    return torchvision.transforms.ToPILImage()((img * STD.reshape(3,1,1))+MEAN.reshape(3,1,1))
 
-class CrossEntropyLoss(torchmetrics.Metric):
-    def __init__(self):
-        super().__init__()
-        self.lossf = nn.CrossEntropyLoss()
-        self.add_state("loss", default=torch.tensor(0.))
-        self.add_state("n", default=torch.tensor(0))
+def show(ds:ImageFolder, img_i:int):
+    img, l = ds[img_i]
 
-    def update(self, preds: torch.Tensor, target: torch.Tensor):
-        self.loss += self.lossf(preds, target)
-        self.n = self.n + target.numel()
+    plt.figure(figsize=(2,2))
+    plt.imshow(whitened_to_PIL(img))
+    plt.axis("off")
+    plt.title(ds.classes[l])
+    plt.show()
 
-    def compute(self):
-        return self.loss / self.n
+def get_device() -> torch.device:
+    if torch.cuda.is_available():
+        device = "cuda"
+    elif torch.backends.mps.is_available():
+        device = "mps"
+    else:
+        device = "cpu"
 
-def metrics_to_str(metrics: dict):
-    return ', '.join((f"{k} = {v.item():.3f}" for k, v in metrics.items()))
+    print(f"Using device: {device}")
+    return torch.device(device)
+
+def save_model(m:torch.nn.Module, accuracy:float, desc:str="") -> Path:
+    time = datetime.now().strftime("%Y-%m-%d_%H.%M.%S")
+    model_name = type(m).__name__
+    filename = f"{time}_{model_name}_{round(accuracy*100)}%_{desc}.pth"
+
+    if not MODELS_DIR.exists():
+        MODELS_DIR.mkdir()
+    path = MODELS_DIR / filename
+
+    torch.save(m.state_dict(), path)
+    print(f"Model is saved to {path.absolute()}")
+    return path
+
+def load_last_model(m:torch.nn.Module) -> nn.Module:
+    model_name = type(m).__name__
+    files = sorted(MODELS_DIR.glob(f"*{model_name}*"), key=os.path.getctime)
+    assert len(files) != 0, f"No saved {model_name} models found in {MODELS_DIR.absolute()}"
+
+    print(f"Loading model from {files[-1].absolute()}")
+    m.load_state_dict(torch.load(files[-1]))
+    return m

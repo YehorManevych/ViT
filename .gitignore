@@ -1,7 +1,5 @@
 .vscode
 models
-data
-imagenette2
-cifar
+datasets
 .DS_Store
 __pycache__
