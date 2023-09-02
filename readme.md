@@ -6,4 +6,4 @@ Fine-tuning is performed with CIFAR-10 images in [fine_tuning.ipynb](fine_tuning
 
 This button will open [google_colab_run.ipynb](google_colab_run.ipynb) in Google Colab
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://githubtocolab.com/YehorManevych/ViT/blob/master/google_colab_run.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://githubtocolab.com/YehorManevych/ViT/blob/master/test.ipynb)
