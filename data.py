@@ -129,10 +129,12 @@ def load_CIFAR(train:bool, batch_size:int, max_batches_n:int | None = None, shuf
 
     subset = ds
     if max_batches_n is not None:
-        desired_len = batch_size * max_batches_n
+        length = batch_size * max_batches_n
+        length = length if length <= len(ds) else len(ds)
+        
         if seed is not None:
             np.random.seed(seed)
-        indices = np.arange(desired_len)
+        indices = np.arange(length)
         np.random.shuffle(indices)
         subset = Subset(ds, indices.tolist())
 

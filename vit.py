@@ -45,10 +45,10 @@ class MSA(nn.Module):
 class EncoderBlock(nn.Module):
     def __init__(self, d, heads, dmlp, dropout, norm_eps): 
         super().__init__()
-        self.ln_1 = nn.LayerNorm(d, norm_eps, elementwise_affine=True)
+        self.ln_1 = nn.LayerNorm(d, norm_eps)
         self.msa = MSA(heads, d)
         self.dropout = nn.Dropout(dropout)
-        self.ln_2 = nn.LayerNorm(d, norm_eps, elementwise_affine=True)
+        self.ln_2 = nn.LayerNorm(d, norm_eps)
         self.mlp = MLP(d, dmlp, dropout)
 
     def forward(self, z:torch.Tensor) -> torch.Tensor:
@@ -62,11 +62,12 @@ class Encoder(nn.Module):
     def __init__(self, n_embeds, d, heads, dmlp, n_layers, dropout, norm_eps):
         super().__init__()
         self.pos_embeddings = nn.Parameter(torch.randn(1, n_embeds, d))
+        self.dropout = nn.Dropout(dropout)
         self.layers = nn.Sequential(*[EncoderBlock(d, heads, dmlp, dropout, norm_eps) for _ in range(n_layers)])
         self.ln = nn.LayerNorm(d, norm_eps)
         
     def forward(self, z:torch.Tensor) -> torch.Tensor:
-        return self.ln(self.layers(z+self.pos_embeddings))
+        return self.ln(self.layers(self.dropout(z+self.pos_embeddings)))
 
 class ViT(nn.Module):
     def __init__(self, d, image_w, patch, heads, dmlp, layers, n_classes, dropout, norm_eps):
