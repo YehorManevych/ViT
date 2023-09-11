@@ -9,11 +9,12 @@ import torchmetrics
 from torchmetrics.classification import MulticlassAccuracy, MulticlassPrecision, MulticlassRecall
 from enum import Enum
 
+
 class CrossEntropyLoss(torchmetrics.Metric):
     def __init__(self):
         super().__init__()
         self.lossf = nn.CrossEntropyLoss()
-        self.add_state("loss", default=torch.tensor(0.))
+        self.add_state("loss", default=torch.tensor(0.0))
         self.add_state("n", default=torch.tensor(0))
 
     def update(self, preds: torch.Tensor, target: torch.Tensor):
@@ -23,18 +24,31 @@ class CrossEntropyLoss(torchmetrics.Metric):
     def compute(self):
         return self.loss / self.n
 
-def metrics_to_str(metrics: dict):
-    return ', '.join((f"{k} = {v.item():.3f}" for k, v in metrics.items()))
 
-def get_metrics(num_classes : int) -> torchmetrics.MetricTracker:
-    return torchmetrics.MetricTracker(torchmetrics.MetricCollection({
-        Metrics.ACCURACY.value: MulticlassAccuracy(num_classes, average="micro"),
-        Metrics.PRECISION.value: MulticlassPrecision(num_classes,average= "macro"),
-        Metrics.RECALL.value: MulticlassRecall(num_classes=num_classes,average="macro"),
-        Metrics.LOSS.value: CrossEntropyLoss()})
+def metrics_to_str(metrics: dict):
+    return ", ".join((f"{k} = {v.item():.3f}" for k, v in metrics.items()))
+
+
+def get_metrics(num_classes: int) -> torchmetrics.MetricTracker:
+    return torchmetrics.MetricTracker(
+        torchmetrics.MetricCollection(
+            {
+                Metrics.ACCURACY.value: MulticlassAccuracy(num_classes, average="micro"),
+                Metrics.PRECISION.value: MulticlassPrecision(num_classes, average="macro"),
+                Metrics.RECALL.value: MulticlassRecall(num_classes=num_classes, average="macro"),
+                Metrics.LOSS.value: CrossEntropyLoss(),
+            }
+        )
     )
 
-def eval(m: nn.Module, dl: DataLoader, num_classes:int, device: torch.device, tracker:torchmetrics.MetricTracker | None = None):
+
+def eval(
+    m: nn.Module,
+    dl: DataLoader,
+    num_classes: int,
+    device: torch.device,
+    tracker: torchmetrics.MetricTracker | None = None,
+):
     if tracker is None:
         tracker = get_metrics(num_classes)
 
@@ -52,7 +66,8 @@ def eval(m: nn.Module, dl: DataLoader, num_classes:int, device: torch.device, tr
         metrics = tracker.compute()
     return metrics
 
-def eval_show(m: nn.Module, dataset, n:int=8, page:int=0):
+
+def eval_show(m: nn.Module, dataset, n: int = 8, page: int = 0):
     m.cpu()
     m.eval()
     imgs = []
@@ -60,7 +75,7 @@ def eval_show(m: nn.Module, dataset, n:int=8, page:int=0):
     preds = []
     with torch.inference_mode():
         for i in range(n):
-            img, l = dataset[n*page + i]
+            img, l = dataset[n * page + i]
             batch = img.unsqueeze(0)
             logits = m(batch)
             imgs.append(img)
@@ -68,21 +83,25 @@ def eval_show(m: nn.Module, dataset, n:int=8, page:int=0):
             preds.append(torch.argmax(logits, dim=1).item())
 
     cols = 8
-    rows = math.ceil(n/cols)
+    rows = math.ceil(n / cols)
     fig, axs = plt.subplots(nrows=rows, ncols=cols)
 
     for i, (ax, img, l, pred) in enumerate(zip(axs.flatten(), imgs, ls, preds)):
         ax.imshow(utils.whitened_to_PIL(img))
         ax.axis("off")
         color = "green" if l == pred else "red"
-        ax.set_title(dataset.classes[l] + "\npred: " + dataset.classes[pred], fontsize=8, color=color)
+        ax.set_title(
+            dataset.classes[l] + "\npred: " + dataset.classes[pred], fontsize=8, color=color
+        )
     fig.set_figwidth(15)
+
 
 class Metrics(Enum):
     ACCURACY = "Accuracy"
-    LOSS  = "Loss"
+    LOSS = "Loss"
     PRECISION = "Precision"
     RECALL = "Recall"
+
 
 def plot_metrics(train_metrics: dict, test_metrics: dict):
     fig, axs = plt.subplots(nrows=1, ncols=2)

@@ -6,14 +6,26 @@ import math
 import utils
 from tqdm.notebook import tqdm
 
-def train(m: nn.Module, epochs:int, train_dl: DataLoader, test_dl: DataLoader, device:torch.device, num_classes:int, opt:torch.optim.Optimizer, lossf:nn.Module, evals_per_epoch:int=5, checkpoints:int =0):
+
+def train(
+    m: nn.Module,
+    epochs: int,
+    train_dl: DataLoader,
+    test_dl: DataLoader,
+    device: torch.device,
+    num_classes: int,
+    opt: torch.optim.Optimizer,
+    lossf: nn.Module,
+    evals_per_epoch: int = 5,
+    checkpoints: int = 0,
+):
     batches = len(train_dl)
-    # running window for the train metrics
-    metric_window = math.ceil(batches/evals_per_epoch)
+    # running window for the model evaluation
+    metric_window = math.ceil(batches / evals_per_epoch)
     m = m.to(device)
     train_tracker = eval.get_metrics(num_classes)
     test_tracker = eval.get_metrics(num_classes)
-    epochs_per_checkpoint = math.ceil(epochs/checkpoints)
+    epochs_per_checkpoint = math.ceil(epochs / checkpoints)
     ebar = tqdm(range(epochs), desc="Epochs")
     for epoch in ebar:
         ebar.set_description(f"Epoch {epoch}")
@@ -33,8 +45,8 @@ def train(m: nn.Module, epochs:int, train_dl: DataLoader, test_dl: DataLoader, d
 
             with torch.inference_mode():
                 window_started = i % metric_window == 0
-                window_ended = (i+1) % metric_window == 0 or i == batches - 1
-                if(window_started):
+                window_ended = (i + 1) % metric_window == 0 or i == batches - 1
+                if window_started:
                     train_tracker.increment()
 
                 train_tracker(logits_d.cpu(), ls)
@@ -48,9 +60,8 @@ def train(m: nn.Module, epochs:int, train_dl: DataLoader, test_dl: DataLoader, d
                     test_m = eval.eval(m, test_dl, num_classes, device, test_tracker)
                     bbar.write(f"Test: {eval.metrics_to_str(test_m)}\n")
 
-                    if((epoch+1) % epochs_per_checkpoint == 0):
+                    if (epoch + 1) % epochs_per_checkpoint == 0:
                         utils.save_model(m, test_m["Accuracy"].item(), f"e{epoch}")
-
 
             del batch_d
             del ls_d
