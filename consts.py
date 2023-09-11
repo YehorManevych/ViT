@@ -1,7 +1,3 @@
-import utils
-
-device = utils.get_device()
-
 # ------------------Model architecture hyperparameters--------------------
 L = 12
 D = 768
@@ -20,19 +16,17 @@ NORM_EPS = 1e-6
 # ---------------------Fine-tuning hyperparameters------------------------
 LR = 0.003
 MOMENTUM = 0.9
-EPOCHS = 1
-if device.type == "mps":
-    BATCH = 32
-    MAX_ITERATIONS_PER_EPOCH = 500
-else:
-    BATCH = 64
-    MAX_ITERATIONS_PER_EPOCH = 782
+# BATCH size should be small if compute is limited
+# The paper uses batch size of 512 samples
+BATCH = 32
+# EPOCHS number should be small if compute is limited
+# The paper uses 10000 steps to fine-tune the model
+# With batch size 512 it's approx. 102 epochs
+EPOCHS = 5
 # DROPOUT should be zero if the number of iterations is low
 # The paper uses dropout 0.1 for 10000 iterations
 DROPOUT = 0.0
 
 # ----------------------------Other consts--------------------------------
 SEED = 100
-MAX_TEST_BATCHES = int(MAX_ITERATIONS_PER_EPOCH * 0.15 / 0.85)
-EVALS_PER_EPOCH = 5
 IMAGENET_CLASSES_N = 1000
